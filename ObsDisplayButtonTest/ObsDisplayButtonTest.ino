@@ -11,13 +11,12 @@
  * The OBS logo bitmap has been taken from https://github.com/openbikesensor/OpenBikeSensorFirmware/blob/b4db7c662f48321e686d175fd6e9fc4e9c56afd5/src/logo.h#L31.
  */
 
-#include <Arduino.h>
 #include <U8g2lib.h>
 //#include <Wire.h> //I2C did not seem to work
 
 // Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
 // otherwise the input pin will float around and the display may show garbage.
-#define BUTTON_PIN  2
+#define BUTTON_PIN  19 // pin 19 is also used on the OBS PCB for the button
 
 // Choosing a specific U8g2 constructor for our display
 // (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
@@ -145,6 +144,7 @@ void setup(void)
   pinMode(BUTTON_PIN, INPUT);
   u8g2.begin();
   u8g2.setBitmapMode(false /* solid */);
+  u8g2.setFlipMode(1); // rotate display content by 180 degrees
 }
 
 void loop(void)
