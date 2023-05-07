@@ -16,7 +16,9 @@
 
 // Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
 // otherwise the input pin will float around and the display may show garbage.
-#define BUTTON_PIN  2 // pin IO2 is also used on the OBS PCB for the button
+// Please note that it *may* be required to change this pin number to a different one, as pin D2 is already used for I2C on Arduino Micro.
+// No problem on Arduino UNO (except the voltage levels!)
+#define BUTTON_PIN  2 // pin IO2 is also used on the OBS PCB for the button (ESP32-based board)
 
 // Choosing a specific U8g2 constructor for our display
 // (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
