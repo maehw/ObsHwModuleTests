@@ -13,6 +13,14 @@ along with some unicode symbols.
 
 Make sure your hardware and the display operate on compatible voltage levels!
 
+## Photos
+
+![Button pressed](doc/ButtonPressed.jpg)
+
+![Button released](doc/ButtonReleased.jpg)
+
+*(Black line only visible in photo. Finger not visible due to demo mode.)*
+
 ## Compatible hardware
 
 Many Arduino-compatible boards should work.
