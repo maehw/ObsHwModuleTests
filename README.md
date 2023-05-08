@@ -6,6 +6,7 @@ So far, there's ...
 
 * the [OBS display module test](./ObsDisplayButtonTest/README.md) and
 * the [OBS GPS module test jig](./ObsGpsModuleTestJig/README.md).
+* the [OBS GPS test](./ObsGpsTest/README.md).
 
 Also related, but not yet used to test OBS:
 
