@@ -13,13 +13,6 @@ along with some unicode symbols.
 
 Make sure your hardware and the display operate on compatible voltage levels!
 
-## Photos
-
-![Button pressed](doc/ButtonPressed.jpg)
-
-![Button released](doc/ButtonReleased.jpg)
-
-*(Black line only visible in photo. Finger not visible due to demo mode.)*
 
 ## Compatible hardware
 
@@ -38,12 +31,23 @@ The sketch has been used and tested with ...
 
 * U8g2: Library for monochrome displays, version 2
 
+
+## Photos
+
+![Button pressed](doc/ButtonPressedSmall.jpg)
+
+![Button released](doc/ButtonReleasedSmall.jpg)
+
+*(Black line only visible in photo. Finger not visible due to demo mode.)*
+
+
 ## Credits
 
 The following fonts have been used with U8G2:
 
 * `u8g2_font_7x13_t_symbols`
 * `u8g2_font_unifont_t_symbols`
+
 
 ## References
 
