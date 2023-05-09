@@ -367,7 +367,7 @@ void drawSplashScreenAnimated(void)
   }
 }
 
-void drawErrorScreen(void)
+void drawErrorScreen(bool seenUbx, bool seenNmea)
 {
   static char charBuffer[8];
   uint8_t xPos = 67;
@@ -390,20 +390,26 @@ void drawErrorScreen(void)
     u8g2.drawStr(xPos+6, yPos+8, itoa(GpsSerialBaudSlow, charBuffer, 10));
   }
 
-  u8g2.drawStr(xPos, yPos+20, "NO COM LINK");
-  u8g2.setFont(glyphFont4);
-  u8g2.drawGlyph(xPos+10, yPos+40, 0x0032); // broken link icon
-
-  // further indicators for fast and slow
-  u8g2.setFont(glyphFont5);
-  if(fastBaudRate)
+  if(!seenUbx && !seenNmea)
   {
-    u8g2.drawGlyph(xPos+33, yPos+50, 0x0027); // rabbit (=fast) icon
+    u8g2.drawStr(xPos, yPos+20, "NO RX DATA");
+  }
+  else if(seenUbx && !seenNmea)
+  {
+    u8g2.drawStr(xPos, yPos+20, "UBX RX ONLY");
   }
   else
   {
-    u8g2.drawGlyph(xPos+33, yPos+50, 0x002b); // snail (=slow) icon
+    u8g2.drawStr(xPos, yPos+20, "NMEA BROKEN");
   }
+  u8g2.setFont(glyphFont4);
+  u8g2.drawGlyph(xPos+5, yPos+41, 0x0032); // broken link icon
+
+  // further indicators for fast and slow
+  u8g2.setFont(glyphFont5);
+  u8g2.drawGlyph(xPos+29, yPos+37, fastBaudRate ? 0x0027 : 0x002b); // rabbit (=fast) icon, snail (=slow) icon
+
+  drawMsgIndicators(seenUbx, seenNmea);
 
   u8g2.sendBuffer();
 }
@@ -564,8 +570,21 @@ void loop(void)
   // check for connection errors
   if(!dataAvailable && millis() > 10000)
   {
-    Serial.println(F("No GPS detected (#1): check wiring."));
-    drawErrorScreen();
+    bool seenUbx = ss.hasSeenUbx();
+    bool seenNmea = ss.hasSeenNmea();
+    if(!seenUbx && !seenNmea)
+    {
+      Serial.println(F("No RX data at all: check wiring."));
+    }
+    else if(seenUbx && !seenNmea)
+    {
+      Serial.println(F("UBX RX only, no NMEA seen."));
+    }
+    else
+    {
+      Serial.println(F("NMEA seen, but seems to be invalid or incomplete."));
+    }
+    drawErrorScreen(seenUbx, seenNmea);
     while(true);
   }
 }

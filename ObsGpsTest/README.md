@@ -20,9 +20,9 @@ Dependent on the button status at startup, the sketch tries to connect to the u-
 
 ### Error view
 
-Something must have gone wrong when this view appears - there's no communication with the GPS module. This is also indicated with a "broken link" symbol. In addition, the baudrate is printed as number and a "speed indicator" is shown (rabbit or snail icon). Check your wiring - maybe the power supply connection is broken or UBX TX/ uC RX not connected properly.
+Something must have gone wrong when this view appears - there's no valid communication with the GPS module. This is also indicated with a "broken link" symbol. In addition, the baudrate is printed as number and a "speed indicator" is shown (rabbit or snail icon). Check your wiring - maybe the power supply connection is broken or UBX TX/ uC RX not connected properly.
 
-![Error view](./doc/ErrorViewSmall.jpg)
+The display will give additional info if data has been received that could be UBX binary data or NMEA data ("NO RX DATA": neither UBX nor NMEA seen, "UBX RX ONLY": only UBX binary data seen but requiring NMEA, "NMEA BROKEN": seen data that could be NMEA but it seems invalid or incomplete).
 
 Please note that the UBX RX/ uC TX line is not relevant for the current type of communication and therefore not tested so far.
 
@@ -44,6 +44,8 @@ The constellation view on the left side shows all satellites with their azimuth 
 Below the constellation, the current UTC time is displayed.
 
 On the right side there's a list of satellites with their name (left column) sorted descended by their "signal strength", i.e. the satellite with the strongest signal comes first. The numbers in the right column are the C/N0 values. As there's only limited display space, only up to 8 satellites are listed!
+
+***Note**: The current version does not match the image from above. It should show 7 signal strength bars instead of 8. It also has two indicators that show if any UBX or NMEA messages have been received. (Only tested for NMEA so far.)*
 
 
 ## Compatible hardware
