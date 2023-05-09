@@ -7,11 +7,13 @@
 #include <U8g2lib.h>
 //#include <Wire.h> //I2C for the display did not seem to work
 #include <TinyGPSPlus.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
+#include "GpsSoftwareSerial.h"
 
 // Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
 // otherwise the input pin will float around and the display may show garbage.
 static const int ButtonPin = 2;
+//static const int LedPin = 2; // conflict!
 static const int GpsSerialRxPin = 16; // OBS' TX_NEO6M signal: IO16
 static const int GpsSerialTxPin = 17; // OBS' RX_NEO6M signal: IO17
 static const uint32_t GpsSerialBaudSlow = 9600;
@@ -24,7 +26,7 @@ bool fastBaudRate = false;
 TinyGPSPlus gps;
 
 // The serial connection to the GPS device
-SoftwareSerial ss(GpsSerialRxPin, GpsSerialTxPin);
+GpsSoftwareSerial ss(GpsSerialRxPin, GpsSerialTxPin);
 
 // Choosing a specific U8g2 constructor for our display
 // (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
@@ -188,7 +190,7 @@ void drawSatConstellation(int numSats, satellite_t* drawSats)
 
 void drawSatSignalBars(int numActiveSats, satellite_t* drawSats)
 {
-  const int maxBars = 8; // only space for 8 bars on the small display
+  const int maxBars = 7; // only space for 7 bars on the small display
   const uint8_t xOffs = 45;
   const uint8_t height = 6;
   const uint8_t yInc = height+1;
@@ -245,6 +247,16 @@ void drawTime()
   u8g2.setFont(smallTextFont);
 }
 
+void drawMsgIndicators(bool seenUbx, bool seenNmea)
+{
+  uint8_t xpos = 63;
+  uint8_t ypos = 62;
+
+  u8g2.setFont(textFont);
+  u8g2.drawButtonUTF8(xpos, ypos, seenUbx ? U8G2_BTN_BW1 | U8G2_BTN_INV : U8G2_BTN_BW1, 22, 2, 2, "UBX");
+  u8g2.drawButtonUTF8(xpos+30, ypos, seenNmea ? U8G2_BTN_BW1 | U8G2_BTN_INV : U8G2_BTN_BW1, 22, 2, 2, "NMEA");
+}
+
 void drawGraphics(int numActiveSats, satellite_t* drawSats)
 {
   u8g2.clearBuffer();
@@ -260,6 +272,8 @@ void drawGraphics(int numActiveSats, satellite_t* drawSats)
   drawSatSignalBars(numActiveSats, drawSats);
 
   drawTime();
+
+  drawMsgIndicators(ss.hasSeenUbx(), ss.hasSeenNmea());
 
   u8g2.sendBuffer();
 }
@@ -436,7 +450,11 @@ void setup(void)
   u8g2.begin();
   u8g2.setBitmapMode(false /* solid */);
   u8g2.setFlipMode(1); // rotate display content by 180 degrees
+
+//  pinMode(LedPin, OUTPUT);
+//  digitalWrite(LedPin, HIGH);
   drawSplashScreenAnimated();
+//  digitalWrite(LedPin, LOW);
 
   u8g2.setFont(smallTextFont);
 }
@@ -480,6 +498,7 @@ void printSatInfo(int numActiveSats)
 
 void loop(void)
 {
+  static int builtinLedState = LOW;
   static bool dataAvailable = false;
   static const int downsamplingFactor = 1; // base rate usually is 1 Hz, i.e. every second
   static int downsampleCounter = downsamplingFactor-1;
@@ -520,6 +539,10 @@ void loop(void)
         if( downsampleCounter == downsamplingFactor )
         {
           downsampleCounter = 0;
+
+          // toggle LED
+          builtinLedState = !builtinLedState;
+          //digitalWrite(LedPin, builtinLedState);
 
           // get a copy for sorting and set all satellites back to inactive until seen again
           memcpy(sortedSats, sats, sizeof(sats));
