@@ -3,8 +3,10 @@
 
 #include <SoftwareSerial.h>
 
+
 class GpsSoftwareSerial : SoftwareSerial {
   public:
+    static const unsigned int RX_STARTUP_MEM_LEN = 64;
 
     enum GpsRxState {
       IDLE,
@@ -20,15 +22,21 @@ class GpsSoftwareSerial : SoftwareSerial {
     void begin(long speed);
     int read();
     int available();
+    size_t write(uint8_t b);
 
     bool hasSeenUbx();
     bool hasSeenNmea();
+    unsigned int getRxCount();
+    unsigned int getRxStartupMemLen() { return RX_STARTUP_MEM_LEN; }
+    int* getRxStartupMem() { return mRxStartupMem; }
   private:
     void inspect(int c);
 
     bool mSeenUbx;
     bool mSeenNmea;
     GpsRxState mRxState;
+    unsigned int mRxCount;
+    int mRxStartupMem[RX_STARTUP_MEM_LEN];
 };
 
 #endif

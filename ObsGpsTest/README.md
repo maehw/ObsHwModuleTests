@@ -4,6 +4,9 @@ This folder contains an Arduino project to test an OpenBikeSensor GPS module. It
 
 Just look into the source code: [`ObsGpsTest.ino`](ObsGpsTest.ino)
 
+> **Warning**  
+> This test code has only been tested successfully with GPS modules that automatically start transmitting NMEA messages. Please also note that the ESP itself requires some time to boot until it can receive data from the GPS module. So far no success with UBX messages - so please no wrong exceptions. There's no activation of cyclic messages nor any polling mechanism. Just a tiny attempt to get any UBX message by sending one UBX message to the module and expecting an ACK-NAK response (not seen so far on my modules). You can help testing and improving this test code on your modules! :)
+
 ## Usage
 
 The firmware has three views:

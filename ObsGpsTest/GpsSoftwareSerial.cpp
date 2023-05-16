@@ -4,8 +4,10 @@ GpsSoftwareSerial::GpsSoftwareSerial(uint8_t receivePin, uint8_t transmitPin) :
     SoftwareSerial(receivePin, transmitPin),
     mSeenUbx(false),
     mSeenNmea(false),
-    mRxState(IDLE)
+    mRxState(IDLE),
+    mRxCount(0)
 {
+  memset(mRxStartupMem, 0, RX_STARTUP_MEM_LEN);
 }
 
 GpsSoftwareSerial::~GpsSoftwareSerial()
@@ -65,6 +67,7 @@ void GpsSoftwareSerial::inspect(int c)
         mRxState = IDLE;
       }
       break;
+    case UBX_MAGIC_MATCH: /* intentional fall-through: go back to IDLE */
     default:
       mRxState = IDLE;
       break;
@@ -74,8 +77,26 @@ void GpsSoftwareSerial::inspect(int c)
 int GpsSoftwareSerial::read()
 {
   int character = SoftwareSerial::read();
-  inspect(character);
+  if(character != -1)
+  {
+    inspect(character);
+
+    if(mRxCount < RX_STARTUP_MEM_LEN)
+    {
+      mRxStartupMem[mRxCount] = character; // memorize for later analysis
+    }
+    
+    if(mRxCount < UINT_MAX) // saturate to prevent roll-over
+    {
+      ++mRxCount;
+    }
+  }
   return character;
+}
+
+size_t GpsSoftwareSerial::write(uint8_t b)
+{
+  return SoftwareSerial::write(b);
 }
 
 int GpsSoftwareSerial::available()
@@ -92,3 +113,8 @@ bool GpsSoftwareSerial::hasSeenNmea()
 {
   return mSeenNmea;
 };
+
+unsigned int GpsSoftwareSerial::getRxCount()
+{
+  return mRxCount;
+}

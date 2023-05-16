@@ -13,7 +13,6 @@
 // Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
 // otherwise the input pin will float around and the display may show garbage.
 static const int ButtonPin = 2;
-//static const int LedPin = 2; // conflict!
 static const int GpsSerialRxPin = 16; // OBS' TX_NEO6M signal: IO16
 static const int GpsSerialTxPin = 17; // OBS' RX_NEO6M signal: IO17
 static const uint32_t GpsSerialBaudSlow = 9600;
@@ -27,6 +26,8 @@ TinyGPSPlus gps;
 
 // The serial connection to the GPS device
 GpsSoftwareSerial ss(GpsSerialRxPin, GpsSerialTxPin);
+
+unsigned int ssStartupRxCount = 0;
 
 // Choosing a specific U8g2 constructor for our display
 // (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
@@ -355,18 +356,6 @@ void drawSplashScreen(bool infill)
   u8g2.sendBuffer();
 }
 
-void drawSplashScreenAnimated(void)
-{
-  // splash screen that can be skipped by pressing the OBS' button
-  bool toggleVal = true;
-  for(int i=0; i<10; i++)
-  {
-    drawSplashScreen(toggleVal);
-    toggleVal = !toggleVal;
-    delay(500);
-  }
-}
-
 void drawErrorScreen(bool seenUbx, bool seenNmea)
 {
   static char charBuffer[8];
@@ -380,28 +369,16 @@ void drawErrorScreen(bool seenUbx, bool seenNmea)
   u8g2.drawXBMP(0, 0, OBSLogo_width, OBSLogo_height, OBSLogo);
 
   u8g2.setFont(textFont);
-  u8g2.drawStr(xPos, yPos, "BAUDRATE");
-  if(fastBaudRate)
-  {
-    u8g2.drawStr(xPos+6, yPos+8, itoa(GpsSerialBaudFast, charBuffer, 10));
-  }
-  else
-  {
-    u8g2.drawStr(xPos+6, yPos+8, itoa(GpsSerialBaudSlow, charBuffer, 10));
-  }
+  u8g2.drawStr(xPos-3, yPos, "BAUD");
+  u8g2.drawStr(xPos+25, yPos, itoa(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow, charBuffer, 10));
 
-  if(!seenUbx && !seenNmea)
-  {
-    u8g2.drawStr(xPos, yPos+20, "NO RX DATA");
-  }
-  else if(seenUbx && !seenNmea)
-  {
-    u8g2.drawStr(xPos, yPos+20, "UBX RX ONLY");
-  }
-  else
-  {
-    u8g2.drawStr(xPos, yPos+20, "NMEA BROKEN");
-  }
+  u8g2.drawStr(xPos-3, yPos+10, "RX ST"); // RX count at startup
+  u8g2.drawStr(xPos+33, yPos+10, itoa((ssStartupRxCount > 9999) ? 9999 : ssStartupRxCount, charBuffer, 10));
+
+  u8g2.drawStr(xPos-3, yPos+20, "RX NOW"); // RX count now
+  unsigned int rxCount = ss.getRxCount();
+  u8g2.drawStr(xPos+33, yPos+20, itoa((rxCount > 9999) ? 9999 : rxCount, charBuffer, 10));
+
   u8g2.setFont(glyphFont4);
   u8g2.drawGlyph(xPos+5, yPos+41, 0x0032); // broken link icon
 
@@ -414,55 +391,13 @@ void drawErrorScreen(bool seenUbx, bool seenNmea)
   u8g2.sendBuffer();
 }
 
-void setup(void)
+void setupDisplay()
 {
-  Serial.begin(115200);
-  Serial.print(F("Using TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
-  Serial.println();
-
-  pinMode(ButtonPin, INPUT);
-  delay(100);
-  if(digitalRead(ButtonPin) == HIGH)
-  {
-    Serial.print(F("Using fast"));
-    fastBaudRate = true;
-  }
-  else
-  {
-    Serial.print(F("Using slow"));
-    fastBaudRate = false;
-  }
-  Serial.println(F(" baudrate w/ GPS module."));
-
-  // start communication with GPS module (either fast or slow)
-  ss.begin(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow);
-
-  // Initialize all the uninitialized TinyGPSCustom objects
-  for (int i=0; i<4; ++i)
-  {
-    gpsSatNumber[i].begin(gps, "GPGSV", 4 + 4 * i);
-    gpsElevation[i].begin(gps, "GPGSV", 5 + 4 * i);
-    gpsAzimuth[i].begin(gps, "GPGSV", 6 + 4 * i);
-    gpsSnr[i].begin(gps, "GPGSV", 7 + 4 * i);
-  }
-
-  for (int i=0; i<MAX_SATELLITES; ++i)
-  {
-    sats[i].no = -1;
-    sats[i].active = false;
-  }
-
   // prepare display and show animated splash screen
   u8g2.begin();
   u8g2.setBitmapMode(false /* solid */);
   u8g2.setFlipMode(1); // rotate display content by 180 degrees
-
-//  pinMode(LedPin, OUTPUT);
-//  digitalWrite(LedPin, HIGH);
-  drawSplashScreenAnimated();
-//  digitalWrite(LedPin, LOW);
-
-  u8g2.setFont(smallTextFont);
+  drawSplashScreen(0);
 }
 
 int sortSats()
@@ -481,6 +416,25 @@ int sortSats()
     }
   }
   return numActiveSats;
+}
+
+void pokeUbx()
+{
+  // "provoke" a UBX protocol based reponse
+
+  Serial.println(F("Tx'ing UBX message. Maybe get an ACK-* message back?"));
+  // TX something to the GPS module and hope for RX'ing a UBX response 
+  uint8_t ubxTxMsg[8] = {0xB5, 0x62, 0x06, 0x00, 0x00, 0x00, 0xDE, 0xAD};
+  ss.write(ubxTxMsg[0]); // sync char 1
+  ss.write(ubxTxMsg[1]); // sync char 2
+  ss.write(ubxTxMsg[2]); // message class (0x06='CFG')
+  ss.write(ubxTxMsg[3]); // message ID (0x00='PRT', 0x13='ANT')
+  ss.write(ubxTxMsg[4]); // length
+  ss.write(ubxTxMsg[5]); // length
+  uint16_t checksum = calcFletcherChecksum(&ubxTxMsg[2], /*len=*/4); // calculate checksum (start at the class field, i.e. at offset +2)
+  ss.write((checksum >> 8) & 0x00FF); // checksum ('CK_A')
+  ss.write(checksum & 0x00FF); // checksum ('CK_B')
+
 }
 
 void printSatInfo(int numActiveSats)
@@ -502,9 +456,185 @@ void printSatInfo(int numActiveSats)
   Serial.println(numActiveSats);
 }
 
+unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogStatus=false)
+{
+  static bool statusLogged = false;
+  static unsigned int checkCount = 0;
+
+  ++checkCount;
+
+  if(alwaysLogStatus || !dataAvailable || (dataAvailable && !statusLogged))
+  {
+    statusLogged = true; // do this only once and not cyclically
+
+    bool seenUbx = ss.hasSeenUbx();
+    bool seenNmea = ss.hasSeenNmea();
+
+    unsigned int rxCount = ss.getRxCount();
+    Serial.print(F("Current RX count: "));
+    Serial.println(rxCount);
+
+    if(!seenUbx && !seenNmea)
+    {
+      Serial.println(F("No RX data at all: check wiring."));
+    }
+    else
+    {
+      Serial.print(F("UBX RX "));
+      if(!seenUbx)
+      {
+        Serial.print(F("not "));
+      }
+      Serial.println(F("seen."));
+
+      Serial.print(F("NMEA RX "));
+      if(seenNmea)
+      {
+        if(dataAvailable)
+        {
+          Serial.println(F("seen, data available. Everything seems to work."));
+        }
+        else
+        {
+          Serial.println(F("seen, but seems to be invalid or incomplete."));
+        }
+      }
+      else
+      {
+        Serial.print(F("not seen."));
+      }
+    }
+
+    if(!seenUbx)
+    {
+      //pokeUbx();
+    }
+
+    // trap the error permanently until reset
+    if(!dataAvailable)
+    {
+      drawErrorScreen(seenUbx, seenNmea);
+
+      // dump RX memory
+      unsigned int len = ss.getRxStartupMemLen();
+      Serial.print(F("RX startup memory length: "));
+      Serial.println(len);
+      Serial.print(F("RX count: "));
+      Serial.println(rxCount);
+
+      unsigned int loopCnt = (len < rxCount) ? len : rxCount;
+      int* pMem = ss.getRxStartupMem();
+
+      // dump received bytes as HEX
+      for(unsigned int i=0; i<loopCnt; i++)
+      {
+        if(i % 8 == 0)
+        {
+          Serial.println(); // line break
+        }
+        Serial.print(" 0x");
+        Serial.print(*pMem, HEX);
+        pMem++;
+      }
+      Serial.println(); // final line break
+      
+      if(trap)
+      {
+        Serial.println(F("Trapped."));
+        while(true);
+      }
+    }    
+  }
+
+  return checkCount;
+}
+
+uint16_t calcFletcherChecksum(uint8_t* pData, size_t len)
+{
+  // calculate checksum using 8 bit Fletcher algorithm
+  uint8_t ckA = 0;
+  uint8_t ckB = 0;
+  for(size_t i=0; i<len; i++)
+  {
+    ckA += *pData;
+    ckB += ckA;
+    pData++;
+  }
+  return ((uint16_t)ckA << 8) | (uint16_t)ckB;
+}
+
+void setup(void)
+{
+  unsigned int setupTime = millis();
+  pinMode(ButtonPin, INPUT);
+  if(digitalRead(ButtonPin) == HIGH)
+  {
+    fastBaudRate = true;
+  }
+  else
+  {
+    fastBaudRate = false;
+  }
+
+  // start communication with GPS module (either fast or slow)
+  ss.begin(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow);
+
+  // before setting anything else up, use the time directly after startup 
+  // to check for serial activity (and try to find NMEA or UBX);
+  // only read from software serial, do not use for moving to GPS decoder;
+  // the UBX-speaking modules dump some info on startup but are quiet from then on;
+  // don't even setup the display before
+  while(millis() <= (setupTime+2000))
+  {
+    // Dispatch incoming characters
+    if (ss.available() > 0)
+    {
+      ss.read();
+    }
+  }
+
+  setupDisplay();
+
+  // use hardware serial for logging
+  Serial.begin(115200);
+  Serial.print(F("Using TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  if(fastBaudRate)
+  {
+    Serial.print(F("Using fast"));
+  }
+  else
+  {
+    Serial.print(F("Using slow"));
+  }
+  Serial.println(F(" baudrate w/ GPS module."));
+  ssStartupRxCount = ss.getRxCount();
+  Serial.print(F("Rx'ed no. of bytes during startup: "));
+  Serial.println(ssStartupRxCount);
+  //Serial.print(F("Setup time was: "));
+  //Serial.println(setupTime);
+
+  drawSplashScreen(1);
+
+  // Initialize all the uninitialized TinyGPSCustom objects
+  for (int i=0; i<4; ++i)
+  {
+    gpsSatNumber[i].begin(gps, "GPGSV", 4 + 4 * i);
+    gpsElevation[i].begin(gps, "GPGSV", 5 + 4 * i);
+    gpsAzimuth[i].begin(gps, "GPGSV", 6 + 4 * i);
+    gpsSnr[i].begin(gps, "GPGSV", 7 + 4 * i);
+  }
+
+  for (int i=0; i<MAX_SATELLITES; ++i)
+  {
+    sats[i].no = -1;
+    sats[i].active = false;
+  }
+
+  u8g2.setFont(smallTextFont);
+}
+
 void loop(void)
 {
-  static int builtinLedState = LOW;
   static bool dataAvailable = false;
   static const int downsamplingFactor = 1; // base rate usually is 1 Hz, i.e. every second
   static int downsampleCounter = downsamplingFactor-1;
@@ -546,10 +676,6 @@ void loop(void)
         {
           downsampleCounter = 0;
 
-          // toggle LED
-          builtinLedState = !builtinLedState;
-          //digitalWrite(LedPin, builtinLedState);
-
           // get a copy for sorting and set all satellites back to inactive until seen again
           memcpy(sortedSats, sats, sizeof(sats));
           for (int i=0; i<MAX_SATELLITES; ++i)
@@ -559,7 +685,8 @@ void loop(void)
 
           int numActiveSats = sortSats();
 
-          printSatInfo(numActiveSats);
+          // uncomment for verbose log messages
+          //printSatInfo(numActiveSats);
 
           drawGraphics(numActiveSats, sortedSats);
         }
@@ -568,23 +695,19 @@ void loop(void)
   }
 
   // check for connection errors
-  if(!dataAvailable && millis() > 10000)
+  if(millis() > 10000)
   {
-    bool seenUbx = ss.hasSeenUbx();
-    bool seenNmea = ss.hasSeenNmea();
-    if(!seenUbx && !seenNmea)
+    static int checkCount = 0;
+
+    if(checkCount == 0)
     {
-      Serial.println(F("No RX data at all: check wiring."));
+      checkCount = checkCommunication(dataAvailable, /*trap=*/false);
     }
-    else if(seenUbx && !seenNmea)
+
+    if(millis() > 15000 && checkCount == 1)
     {
-      Serial.println(F("UBX RX only, no NMEA seen."));
+      checkCount = checkCommunication(dataAvailable, /*trap=*/true, true);
     }
-    else
-    {
-      Serial.println(F("NMEA seen, but seems to be invalid or incomplete."));
-    }
-    drawErrorScreen(seenUbx, seenNmea);
-    while(true);
   }
+
 }
