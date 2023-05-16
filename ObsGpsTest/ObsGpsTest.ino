@@ -507,7 +507,7 @@ unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogSta
 
     if(!seenUbx)
     {
-      //pokeUbx();
+      pokeUbx();
     }
 
     // trap the error permanently until reset
