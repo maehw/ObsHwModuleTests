@@ -13,5 +13,6 @@ jobs:
       - name: Install platform
         run: |
           arduino-cli core update-index
+          arduino-cli core install esp32:esp32
       - name: Compile Sketch
         run: arduino-cli compile --fqbn esp32:esp32:nodemcu-32s ./ObsGpsTest --warnings more
