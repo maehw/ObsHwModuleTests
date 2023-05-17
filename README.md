@@ -4,7 +4,7 @@ This git repository contains some experimental parts that may help to test hardw
 
 So far, there's ...
 
-* the [OBS display module test](./ObsDisplayButtonTest/README.md) ![example workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg) and
+* the [OBS display module test](./ObsDisplayButtonTest/README.md) ![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg) and
 * the [OBS GPS module test jig](./ObsGpsModuleTestJig/README.md).
 * the [OBS GPS test](./ObsGpsTest/README.md).
 
