@@ -18,4 +18,4 @@ jobs:
           arduino-cli lib install U8g2
           arduino-cli lib install EspSoftwareSerial
       - name: Compile Arduino sketch ObsGpsTest
-        run: arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 ./ObsGpsTest --warnings more
+        run: arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 ./ObsGpsTest
