@@ -19,5 +19,6 @@ jobs:
           arduino-cli lib install EspSoftwareSerial
       - name: Compile Arduino sketch ObsGpsTest
         run: |
-          arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 ./ObsGpsTest
+          arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 ./ObsGpsTest -v --log-file build.log
           ls -al
+          ls -al ./ObsGpsTest
