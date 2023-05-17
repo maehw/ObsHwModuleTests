@@ -13,7 +13,7 @@ jobs:
       - name: Install platform
         run: |
           arduino-cli core update-index --additional-urls https://dl.espressif.com/dl/package_esp32_index.json
-          arduino-cli core search esp32
-          arduino-cli core install esp32:esp32
+          arduino-cli core search esp32 --additional-urls https://dl.espressif.com/dl/package_esp32_index.json
+          arduino-cli core install esp32:esp32 --additional-urls https://dl.espressif.com/dl/package_esp32_index.json
       - name: Compile Sketch
         run: arduino-cli compile --fqbn esp32:esp32:esp32 ./ObsGpsTest --warnings more
