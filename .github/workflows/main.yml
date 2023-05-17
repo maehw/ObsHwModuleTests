@@ -4,18 +4,6 @@ on:
   pull_request:
 jobs:
   build:
-    strategy:
-      matrix:
-        arduino-platform: ["esp32:esp32"]
-        # This is usually optional but we need to statically define the
-        # FQBN of the boards we want to test for each platform. In the
-        # future the CLI might automatically detect and download the core
-        # needed to compile against a certain FQBN, at that point the
-        # following `include` section will be useless.
-        include:
-          # variable `fqbn` is set to "arduino:avr:uno".
-          - arduino-platform: "esp32:esp32"
-            fqbn: "esp32:esp32:nodemcu-32s"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,7 +13,5 @@ jobs:
       - name: Install platform
         run: |
           arduino-cli core update-index
-      # Finally, we compile the sketch, using the FQBN that was set
-      # in the build matrix.
       - name: Compile Sketch
-        run: arduino-cli compile --fqbn $ ./ObsGpsTest --warnings more
+        run: arduino-cli compile --fqbn esp32:esp32:nodemcu-32s ./ObsGpsTest --warnings more
