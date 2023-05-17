@@ -5,6 +5,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      OBS_GPS_TEST_DIR: ./ObsGpsTest
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -19,6 +21,5 @@ jobs:
           arduino-cli lib install EspSoftwareSerial
       - name: Compile Arduino sketch ObsGpsTest
         run: |
-          arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 ./ObsGpsTest -v --log-file build.log
-          ls -al
-          ls -al ./ObsGpsTest
+          arduino-cli compile  --config-file arduino-cli.yml --fqbn esp32:esp32:esp32 $OBS_GPS_TEST_DIR --log-file $OBS_GPS_TEST_DIR/build.log --output-dir $OBS_GPS_TEST_DIR/build 
+          ls -al $OBS_GPS_TEST_DIR/build
