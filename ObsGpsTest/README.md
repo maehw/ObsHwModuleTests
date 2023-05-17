@@ -1,3 +1,5 @@
+![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg)
+
 # OBS GPS test
 
 This folder contains an Arduino project to test an OpenBikeSensor GPS module. It also requires an OBS display module (or at least its SSD1306 128x64 pixels I2C OLED display and optionally a push button).
