@@ -418,23 +418,30 @@ int sortSats()
   return numActiveSats;
 }
 
-void pokeUbx()
+void pollUbx(uint8_t msgClass, uint8_t msgId)
 {
-  // "provoke" a UBX protocol based reponse
+  // send an UBX (binar protocol) message
+  // (and implicitely expect an ACK-* message back; please note that the RX side is not covered here)
+  uint8_t ubxTxMsg[8] = {
+    0xB5, // 1st sync char
+    0x62, // 2nd sync char
+    msgClass, // message class
+    msgId, // message ID
+    0x00, // 1st length byte
+    0x00, // 2nd length byte
+    0xDE, // 1st checksum byte 'CK_A' (to be calculated)
+    0xAD, // 2nd checksum byte 'CK_B' (to be calculated)
+  };
 
-  Serial.println(F("Tx'ing UBX message. Maybe get an ACK-* message back?"));
-  // TX something to the GPS module and hope for RX'ing a UBX response 
-  uint8_t ubxTxMsg[8] = {0xB5, 0x62, 0x06, 0x00, 0x00, 0x00, 0xDE, 0xAD};
-  ss.write(ubxTxMsg[0]); // sync char 1
-  ss.write(ubxTxMsg[1]); // sync char 2
-  ss.write(ubxTxMsg[2]); // message class (0x06='CFG')
-  ss.write(ubxTxMsg[3]); // message ID (0x00='PRT', 0x13='ANT')
-  ss.write(ubxTxMsg[4]); // length
-  ss.write(ubxTxMsg[5]); // length
   uint16_t checksum = calcFletcherChecksum(&ubxTxMsg[2], /*len=*/4); // calculate checksum (start at the class field, i.e. at offset +2)
-  ss.write((checksum >> 8) & 0x00FF); // checksum ('CK_A')
-  ss.write(checksum & 0x00FF); // checksum ('CK_B')
+  ubxTxMsg[6] = (checksum >> 8) & 0x00FF; // update CK_A
+  ubxTxMsg[7] = checksum & 0x00FF; // update CK_B
 
+  // send those message bytes!
+  for(size_t i=0; i<sizeof(ubxTxMsg)/sizeof(ubxTxMsg[0]); i++)
+  {
+    ss.write(ubxTxMsg[i]);
+  }
 }
 
 void printSatInfo(int numActiveSats)
@@ -454,6 +461,167 @@ void printSatInfo(int numActiveSats)
   }
   Serial.print(F("  # active sats seen: "));
   Serial.println(numActiveSats);
+}
+
+void pollMultiUbx()
+{
+  // this function can be used to narrow down if the GPS module responds to any UBX message poll request at all!
+  // please note that some polling requests might need payload (which is not implemented (yet?));
+  // currently NAV-* messages are polled and also some CFG-* messages
+
+  // TODO: keep track of responses to individual message classes+IDs; that must be done in the software serial bridge (i.e. GpsSoftwareSerial)
+
+  // TODO: separate functionality and UI in a more proper way;
+  //       especially because of delays/ wait times and the caused delay for reading serial answers back from the GPS module
+
+  static uint8_t entryCount = 0; // don't poll all messages at once; do it in multiple bursts
+  static char charBuffer[8];
+  uint8_t xPos = 8;
+  uint8_t yPos = 9;
+  uint8_t xOffset = 86;
+  const uint16_t showUiWaitTimeMs = 1200;
+
+  entryCount++;
+
+  u8g2.clearBuffer();
+  u8g2.setFont(textFont);
+  u8g2.drawStr(xPos, yPos, "Polling UBX msgs.");
+  u8g2.sendBuffer();
+
+  // for timing purposes first draw all the text messages, then send the poll requests
+  if(entryCount == 1)
+  {
+    u8g2.drawStr(xPos+xOffset, yPos, "(1/4)");
+    xPos += 4;
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-POSCEF");
+  
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-POSLLH");
+  
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-STATUS");
+  
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-DOP");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-SOL");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-VELECEF");
+
+    // draw and wait, then send -- not the other way around!
+    u8g2.sendBuffer();
+    delay(showUiWaitTimeMs);
+
+    pollUbx(0x01, 0x01);
+    pollUbx(0x01, 0x02);
+    pollUbx(0x01, 0x03);
+    pollUbx(0x01, 0x04);
+    pollUbx(0x01, 0x06);
+    pollUbx(0x01, 0x11);
+  }
+  else if(entryCount == 2)
+  {
+    u8g2.drawStr(xPos+xOffset, yPos, "(2/4)");
+    xPos += 4;
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-VELNED");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-TIMEGPS");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-TIMEUTC");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-CLOCK");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-SVINFO");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-DPGPS");
+
+    u8g2.sendBuffer();
+    delay(showUiWaitTimeMs);
+
+    pollUbx(0x01, 0x12);
+    pollUbx(0x01, 0x20);
+    pollUbx(0x01, 0x21);
+    pollUbx(0x01, 0x22);
+    pollUbx(0x01, 0x30);
+    pollUbx(0x01, 0x31);
+  }
+  else if(entryCount == 3)
+  {
+    u8g2.drawStr(xPos+xOffset, yPos, "(3/4)");
+    xPos += 4;
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-SBAS");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-EFKSTATUS");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "NAV-AOPSTATUS");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-MSG");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-INF");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-DAT");
+
+    u8g2.sendBuffer();
+    delay(showUiWaitTimeMs);
+
+    pollUbx(0x01, 0x32);
+    pollUbx(0x01, 0x40);
+    pollUbx(0x01, 0x60);
+    pollUbx(0x06, 0x01); // TODO: has param(s)! payload length=2
+    pollUbx(0x06, 0x02); // TODO: has param(s)! payload length=1
+    pollUbx(0x06, 0x06);
+  }
+  else if(entryCount == 4)
+  {
+    u8g2.drawStr(xPos+xOffset, yPos, "(4/4)");
+    xPos += 4;
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-TP");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-RATE");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-FXN");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-RXM");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-EKF");
+
+    yPos += 8;
+    u8g2.drawStr(xPos, yPos, "CFG-PRT");
+
+    u8g2.sendBuffer();
+    delay(showUiWaitTimeMs);
+
+    pollUbx(0x06, 0x07);
+    pollUbx(0x06, 0x08);
+    pollUbx(0x06, 0x0E);
+    pollUbx(0x06, 0x11);
+    pollUbx(0x06, 0x12);
+    pollUbx(0x06, 0x00); // this one seems to have "worked for me" --> answered! --> put it at the very end; TODO: needs to be optimized, see below  
+  }
 }
 
 unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogStatus=false)
@@ -507,10 +675,9 @@ unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogSta
 
     if(!seenUbx)
     {
-      pokeUbx();
+      pollMultiUbx();
     }
 
-    // trap the error permanently until reset
     if(!dataAvailable)
     {
       drawErrorScreen(seenUbx, seenNmea);
@@ -538,6 +705,7 @@ unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogSta
       }
       Serial.println(); // final line break
       
+      // trap the error permanently until reset
       if(trap)
       {
         Serial.println(F("Trapped."));
@@ -694,8 +862,10 @@ void loop(void)
     }
   }
 
-  // check for connection errors
-  if(millis() > 10000)
+  // check for connection errors; forced poll of UBX messages when no UBX seen at all
+  const uint32_t firstComCheckTimeMs = 10000;
+  const uint32_t comCheckIntervalMs = 7000;
+  if(millis() > firstComCheckTimeMs)
   {
     static int checkCount = 0;
 
@@ -704,10 +874,19 @@ void loop(void)
       checkCount = checkCommunication(dataAvailable, /*trap=*/false);
     }
 
-    if(millis() > 15000 && checkCount == 1)
+    if(millis() > (firstComCheckTimeMs+comCheckIntervalMs) && checkCount == 1)
     {
-      checkCount = checkCommunication(dataAvailable, /*trap=*/true, true);
+      checkCount = checkCommunication(dataAvailable, /*trap=*/false, true); // don't trap yet
+    }
+
+    if(millis() > (firstComCheckTimeMs+2*comCheckIntervalMs) && checkCount == 2)
+    {
+      checkCount = checkCommunication(dataAvailable, /*trap=*/false, true); // still don't trap...
+    }
+
+    if(millis() > (firstComCheckTimeMs+3*comCheckIntervalMs) && checkCount == 3)
+    {
+      checkCount = checkCommunication(dataAvailable, /*trap=*/true, true); // finally trap...
     }
   }
-
 }
