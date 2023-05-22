@@ -5,7 +5,9 @@ GpsSoftwareSerial::GpsSoftwareSerial(uint8_t receivePin, uint8_t transmitPin) :
     mSeenUbx(false),
     mSeenNmea(false),
     mRxState(IDLE),
-    mRxCount(0)
+    mRxCount(0),
+    mLastMsgClass(UBX_MSG_CLASS_INVALID),
+    mUbxMsgStatus{0}
 {
   memset(mRxStartupMem, 0, RX_STARTUP_MEM_LEN);
 }
@@ -18,6 +20,56 @@ GpsSoftwareSerial::~GpsSoftwareSerial()
 void GpsSoftwareSerial::begin(long speed)
 {
   SoftwareSerial::begin(speed);
+}
+
+bool GpsSoftwareSerial::isValidMessageClass(uint8_t c)
+{
+  return (c == UBX_MSG_CLASS_NAV || c == UBX_MSG_CLASS_RXM || c == UBX_MSG_CLASS_INF || c == UBX_MSG_CLASS_ACK || 
+          c == UBX_MSG_CLASS_CFG || c == UBX_MSG_CLASS_MON || c == UBX_MSG_CLASS_AID || c == UBX_MSG_CLASS_TIM || c == UBX_MSG_CLASS_ESF);
+}
+
+bool GpsSoftwareSerial::recordUbxMessage(UbxMessageClass msgClass, uint8_t msgId)
+{
+  bool success = true;
+
+  if(msgClass == UBX_MSG_CLASS_INVALID)
+  {
+    return false;
+  }
+
+  switch(msgClass)
+  {
+    case UBX_MSG_CLASS_ACK:
+      switch((UbxMessageClass)msgId)
+      {
+        case UBX_MSG_ID_ACK_NAK: // intentional fall-through
+        case UBX_MSG_ID_ACK_ACK:
+          // TODO: continue and also do the recording!
+          success = true;
+          break;
+        default:
+          success = false;
+          break;
+      }
+      break;
+    case UBX_MSG_CLASS_CFG:
+      switch((UbxMessageClass)msgId)
+      {
+        case UBX_MSG_ID_CFG_PRT:
+          // TODO: continue and also do the recording!
+          success = true;
+          break;
+        default:
+          success = false;
+          break;
+      }
+      break;
+    default:
+      success = false;
+      break;
+  }
+
+  return success;
 }
 
 void GpsSoftwareSerial::inspect(int c)
@@ -39,12 +91,36 @@ void GpsSoftwareSerial::inspect(int c)
       if(c == 0x62)
       {
         mRxState = UBX_MAGIC_MATCH;
-        mSeenUbx = true;
       }
       else
       {
         mRxState = IDLE;
       }
+      break;
+    case UBX_MAGIC_MATCH:
+      // check message class
+      if(isValidMessageClass(c))
+      {
+        mLastMsgClass = (UbxMessageClass)c;
+        mRxState = UBX_VALID_MSG_CLASS;
+      }
+      else
+      {
+        mLastMsgClass = UBX_MSG_CLASS_INVALID;
+        mRxState = IDLE;
+      }
+      break;
+    case UBX_VALID_MSG_CLASS:
+      // already have message class, now check message ID
+      Serial.print("Message class: ");
+      Serial.print(mLastMsgClass, HEX);
+      Serial.print(", ID: ");
+      Serial.println(c, HEX);
+      if(recordUbxMessage(mLastMsgClass, c))
+      {
+        mSeenUbx = true; // if we ever get here, asue that UBX is alive
+      }
+      mRxState = IDLE; // always return to IDLE
       break;
     case NMEA_CANDIDATE_1:
       if(c == 'G')
@@ -59,15 +135,14 @@ void GpsSoftwareSerial::inspect(int c)
     case NMEA_CANDIDATE_2:
       if(c == 'P' || c == 'N')
       {
-        mRxState = NMEA_MAGIC_MATCH;
         mSeenNmea = true;
+        mRxState = NMEA_MAGIC_MATCH;
       }
       else
       {
         mRxState = IDLE;
       }
       break;
-    case UBX_MAGIC_MATCH: /* intentional fall-through: go back to IDLE */
     default:
       mRxState = IDLE;
       break;
