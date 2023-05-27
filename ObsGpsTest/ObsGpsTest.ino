@@ -687,103 +687,94 @@ void pollMultiUbx(uint8_t burstNumber)
   }
 }
 
-unsigned int checkCommunication(bool dataAvailable, bool trap, bool alwaysLogStatus = false)
+void checkCommunication(bool dataAvailable, bool trap)
 {
-  static bool statusLogged = false;
-  static unsigned int checkCount = 0;
+  bool seenUbx = ss.hasSeenUbx();
+  bool seenNmea = ss.hasSeenNmea();
 
-  ++checkCount;
+  unsigned int rxCount = ss.getRxCount();
+  Serial.print(F("Current RX count: "));
+  Serial.println(rxCount);
 
-  if (alwaysLogStatus || !dataAvailable || (dataAvailable && !statusLogged))
+  if (!seenUbx && !seenNmea)
   {
-    statusLogged = true; // do this only once and not cyclically
-
-    bool seenUbx = ss.hasSeenUbx();
-    bool seenNmea = ss.hasSeenNmea();
-
-    unsigned int rxCount = ss.getRxCount();
-    Serial.print(F("Current RX count: "));
-    Serial.println(rxCount);
-
-    if (!seenUbx && !seenNmea)
+    Serial.println(F("No RX data at all: check wiring and baudrate."));
+  }
+  else
+  {
+    Serial.print(F("UBX RX "));
+    if (!seenUbx)
     {
-      Serial.println(F("No RX data at all: check wiring."));
+      Serial.print(F("not "));
     }
-    else
-    {
-      Serial.print(F("UBX RX "));
-      if (!seenUbx)
-      {
-        Serial.print(F("not "));
-      }
-      Serial.println(F("seen."));
+    Serial.println(F("seen."));
 
-      Serial.print(F("NMEA RX "));
-      if (seenNmea)
+    Serial.print(F("NMEA RX "));
+    if (seenNmea)
+    {
+      if (dataAvailable)
       {
-        if (dataAvailable)
-        {
-          Serial.println(F("seen, data available. Everything seems to work."));
-        }
-        else
-        {
-          Serial.println(F("seen, but seems to be invalid or incomplete."));
-        }
+        Serial.println(F("seen, data available. Everything seems to work."));
       }
       else
       {
-        Serial.print(F("not seen."));
+        Serial.println(F("seen, but seems to be invalid or incomplete."));
       }
     }
-
-    if (!dataAvailable)
+    else
     {
-      drawErrorScreen(seenUbx, seenNmea);
-
-      // dump RX memory
-      unsigned int len = ss.getRxStartupMemLen();
-      Serial.print(F("RX startup memory length: "));
-      Serial.println(len);
-      Serial.print(F("RX count: "));
-      Serial.println(rxCount);
-
-      unsigned int loopCnt = (len < rxCount) ? len : rxCount;
-      int* pMem = ss.getRxStartupMem();
-
-      // dump received bytes as HEX
-      for (unsigned int i = 0; i < loopCnt; i++)
-      {
-        if (i % 8 == 0)
-        {
-          Serial.println(); // line break
-        }
-        Serial.print(" 0x");
-        Serial.print(*pMem, HEX);
-        pMem++;
-      }
-      Serial.println(); // final line break
-
-      // trap the error permanently until reset
-      if (trap)
-      {
-        Serial.println(F("Trapped."));
-        while (true);
-      }
+      Serial.print(F("not seen."));
     }
   }
 
-  return checkCount;
+  if(!dataAvailable && trap)
+  {
+    drawErrorScreen(seenUbx, seenNmea);
+
+    // dump RX memory
+    unsigned int len = ss.getRxStartupMemLen();
+    Serial.print(F("RX startup memory length: "));
+    Serial.println(len);
+    Serial.print(F("RX count: "));
+    Serial.println(rxCount);
+
+    unsigned int loopCnt = (len < rxCount) ? len : rxCount;
+    int* pMem = ss.getRxStartupMem();
+
+    // dump received bytes as HEX
+    for (unsigned int i = 0; i < loopCnt; i++)
+    {
+      if (i % 8 == 0)
+      {
+        Serial.println(); // line break
+      }
+      Serial.print(" 0x");
+      Serial.print(*pMem, HEX);
+      pMem++;
+    }
+    Serial.println(); // final line break
+
+    // trap the error permanently until reset
+    if(trap)
+    {
+      Serial.println(F("Trapped."));
+      while (true);
+    }
+  }
 }
 
 void setup(void)
 {
   unsigned int setupTime = millis();
   pinMode(ButtonPin, INPUT);
+  #warning SoftwareSerial is not reliable for 115'200 baud on ESP32, so always select slow.
+  /*
   if (digitalRead(ButtonPin) == HIGH)
   {
     fastBaudRate = true;
   }
   else
+  */
   {
     fastBaudRate = false;
   }
@@ -918,39 +909,44 @@ void loop(void)
     if (checkCount == 0)
     {
       Serial.println("Coms check #1");
-      checkCount = checkCommunication(dataAvailable, /*trap=*/false);
+      checkCommunication(dataAvailable, /*trap=*/false);
       pollMultiUbx(0);
+      checkCount++;
     }
 
     if (millis() > (firstComCheckTimeMs + comCheckIntervalMs) && checkCount == 1)
     {
       Serial.println("Coms check #2");
       showUbxMessageStatus(0);
-      checkCount = checkCommunication(dataAvailable, /*trap=*/false, true); // don't trap yet
+      checkCommunication(dataAvailable, /*trap=*/false); // don't trap yet
       pollMultiUbx(1);
+      checkCount++;
     }
 
     if (millis() > (firstComCheckTimeMs + 2 * comCheckIntervalMs) && checkCount == 2)
     {
       Serial.println("Coms check #3");
       showUbxMessageStatus(1);
-      checkCount = checkCommunication(dataAvailable, /*trap=*/false, true); // still don't trap...
+      checkCommunication(dataAvailable, /*trap=*/false); // still don't trap...
       pollMultiUbx(2);
+      checkCount++;
     }
 
     if (millis() > (firstComCheckTimeMs + 3 * comCheckIntervalMs) && checkCount == 3)
     {
       Serial.println("Coms check #4");
       showUbxMessageStatus(2);
-      checkCount = checkCommunication(dataAvailable, /*trap=*/false, true); // still don't trap...
+      checkCommunication(dataAvailable, /*trap=*/false); // still don't trap...
       pollMultiUbx(3);
+      checkCount++;
     }
 
     if (millis() > (firstComCheckTimeMs + 4 * comCheckIntervalMs) && checkCount == 4)
     {
       Serial.println("Coms check #5");
       showUbxMessageStatus(3);
-      checkCount = checkCommunication(dataAvailable, /*trap=*/true, true); // finally trap...
+      checkCommunication(dataAvailable, /*trap=*/true); // finally trap...
+      checkCount++;
     }
   }
 }
