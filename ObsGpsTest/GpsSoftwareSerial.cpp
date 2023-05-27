@@ -4,13 +4,14 @@
 #define DEBUG_PRINT(msg)  Serial.print(msg);
 
 GpsSoftwareSerial::GpsSoftwareSerial(uint8_t receivePin, uint8_t transmitPin) :
-    SoftwareSerial(receivePin, transmitPin),
     mSeenUbx(false),
     mSeenNmea(false),
     mRxState(IDLE),
     mRxCount(0),
     mLastMsgClass(UBX_MSG_CLASS_INVALID),
-    mUbxMsgStatus{0}
+    mUbxMsgStatus{0},
+    mTxPin(transmitPin),
+    mRxPin(receivePin)
 {
   memset(mRxStartupMem, 0, RX_STARTUP_MEM_LEN);
 }
@@ -22,7 +23,7 @@ GpsSoftwareSerial::~GpsSoftwareSerial()
 
 void GpsSoftwareSerial::begin(long speed)
 {
-  SoftwareSerial::begin(speed);
+  Serial2.begin(speed, SERIAL_8N1, mRxPin, mTxPin);
 }
 
 bool GpsSoftwareSerial::isValidMessageClass(uint8_t c)
@@ -298,7 +299,7 @@ bool GpsSoftwareSerial::pollUbxMessage(UbxMessageClass msgClass, UbxMessageId ms
 
 int GpsSoftwareSerial::read()
 {
-  int character = SoftwareSerial::read();
+  int character = Serial2.read();
   if(character != -1)
   {
     inspect(character);
@@ -318,12 +319,12 @@ int GpsSoftwareSerial::read()
 
 size_t GpsSoftwareSerial::write(uint8_t b)
 {
-  return SoftwareSerial::write(b);
+  return Serial2.write(b);
 }
 
 int GpsSoftwareSerial::available()
 {
-  return SoftwareSerial::available();
+  return Serial2.available();
 }
 
 bool GpsSoftwareSerial::hasSeenUbx()

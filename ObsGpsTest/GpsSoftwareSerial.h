@@ -4,7 +4,7 @@
 #include <SoftwareSerial.h>
 
 
-class GpsSoftwareSerial : SoftwareSerial {
+class GpsSoftwareSerial {
   public:
     static const unsigned int RX_STARTUP_MEM_LEN = 64;
 
@@ -140,6 +140,8 @@ class GpsSoftwareSerial : SoftwareSerial {
     int mRxStartupMem[RX_STARTUP_MEM_LEN];
     UbxMessageClass mLastMsgClass;
     uint8_t mUbxMsgStatus[UBX_MSG_NUM];
+    int mRxPin;
+    int mTxPin;
 };
 
 #endif

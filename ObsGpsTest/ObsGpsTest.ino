@@ -723,7 +723,7 @@ void checkCommunication(bool dataAvailable, bool trap)
     }
     else
     {
-      Serial.print(F("not seen."));
+      Serial.println(F("not seen."));
     }
   }
 
@@ -767,14 +767,11 @@ void setup(void)
 {
   unsigned int setupTime = millis();
   pinMode(ButtonPin, INPUT);
-  #warning SoftwareSerial is not reliable for 115'200 baud on ESP32, so always select slow.
-  /*
   if (digitalRead(ButtonPin) == HIGH)
   {
     fastBaudRate = true;
   }
   else
-  */
   {
     fastBaudRate = false;
   }
@@ -803,13 +800,15 @@ void setup(void)
   Serial.print(F("Using TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
   if (fastBaudRate)
   {
-    Serial.print(F("Using fast"));
+    Serial.print(F("Using fast (="));
+    Serial.print(GpsSerialBaudFast);
   }
   else
   {
-    Serial.print(F("Using slow"));
+    Serial.print(F("Using slow (="));
+    Serial.print(GpsSerialBaudSlow);
   }
-  Serial.println(F(" baudrate w/ GPS module."));
+  Serial.println(F(") baudrate w/ GPS module."));
   ssStartupRxCount = ss.getRxCount();
   Serial.print(F("Rx'ed no. of bytes during startup: "));
   Serial.println(ssStartupRxCount);
