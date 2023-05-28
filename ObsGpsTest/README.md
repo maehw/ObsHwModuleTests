@@ -7,38 +7,37 @@ This folder contains an Arduino project to test an OpenBikeSensor GPS module. It
 Just look into the source code: [`ObsGpsTest.ino`](ObsGpsTest.ino)
 
 > **Warning**  
-> This test code has only been tested successfully with GPS modules that automatically start transmitting NMEA messages. Please also note that the ESP itself requires some time to boot until it can receive data from the GPS module. So far no success with UBX messages - so please no wrong exceptions. There's no activation of cyclic messages nor any polling mechanism. Just a tiny attempt to get any UBX message by sending one UBX message to the module and expecting an ACK-NAK response (not seen so far on my modules). You can help testing and improving this test code on your modules! :)
+> Please note that the ESP itself requires some time to boot until it can receive data from the GPS module. It also makes a difference if both the ESP and the GPS module are powered at the same time or only the ESP is reset. You can help testing and improving this test code on your modules! :)
 
 ## Usage
 
-The firmware has three views:
+The firmware has different views:
 
 1. An animated splash screen view
-2. Satellite constellation, UTC time and signal strength view
-3. Error view
+2. Satellite constellation, UTC time and signal strength view (derived from NMEA stream data)
+3. UBX poll request status pages
+4. Error/result view
 
 ### Splash screen
 
-Dependent on the button status at startup, the sketch tries to connect to the u-blox NEO-6M module via serial at either 9600 or 115'200 baud. When the button is not pressed, the slow baudrate (9600) will be used and a snail icon is shown. When the button is pressed, the fast baudrate (115'200) will be used and a rabbit icon is shown.
+Dependent on the button status at startup, the sketch tries to connect to the u-blox NEO-6M module via serial at either 9600 or 115'200 baud. When the button is not pressed, the slow baudrate (9600) will be used and a snail icon is shown. When the button is pressed, the fast baudrate (115'200) will be used and a rabbit icon is shown. As soon as the rabbit icon (along with the OBS logo) appears on the display, the button can be released.
 
 ![Splash screen view](./doc/SplashScreenViewSmall.jpg)
 
-### Error view
+### UBX poll request status pages
 
-Something must have gone wrong when this view appears - there's no valid communication with the GPS module. This is also indicated with a "broken link" symbol. In addition, the baudrate is printed as number and a "speed indicator" is shown (rabbit or snail icon). Check your wiring - maybe the power supply connection is broken or UBX TX/ uC RX not connected properly.
+The software checks if the GPS module answers to UBX poll requests. If the poll request for a specific message could be sent one "OK" will appear on the display ("ER" indicates an error). When the poll request has been answered, an additional "OK" will appear on the screen (otherwise a "NO"). TL;DR: "OK OK" is the good case. 
 
-The display will give additional info if data has been received that could be UBX binary data or NMEA data ("NO RX DATA": neither UBX nor NMEA seen, "UBX RX ONLY": only UBX binary data seen but requiring NMEA, "NMEA BROKEN": seen data that could be NMEA but it seems invalid or incomplete).
+"OK NO" is an indicator that ...
+* the serial communication with the GPS module does not work at all (wrong wiring, wrong baudrate, missing power, etc.) or 
+* that the GPS module does not support the specific command.
 
-Please note that the UBX RX/ uC TX line is not relevant for the current type of communication and therefore not tested so far.
-
-Reset the target hardware to try again.
-
-You can also press the button to switch to the higher baudrate and retry again after reset (hold the button pressed until the splash screen appears!).
+And strong indicator (and therefore quite likely a GPS module that's not an original u-blox) of the latter is that you see at least one "OK OK" (especially when it's only for the `CFG-PRT` message) on any of the shown status pages.
 
 
 ### Satellite constellation, UTC time and signal strength
 
-When the sketch on the hardware is able to communicate with the GPS module via serial and receives NMEA messages, it will show the satellite constellation, UTC time and signal strengths:
+When the sketch on the hardware is able to communicate with the GPS module via serial and receives parseable NMEA messages, it will show the satellite constellation, UTC time and signal strengths:
 
 ![Constellation view](./doc/ConstellationViewSmall.jpg)
 
@@ -50,7 +49,20 @@ Below the constellation, the current UTC time is displayed.
 
 On the right side there's a list of satellites with their name (left column) sorted descended by their "signal strength", i.e. the satellite with the strongest signal comes first. The numbers in the right column are the C/N0 values. As there's only limited display space, only up to 8 satellites are listed!
 
+
 ***Note**: The current version does not match the image from above. It should show 7 signal strength bars instead of 8. It also has two indicators that show if any UBX or NMEA messages have been received. (Only tested for NMEA so far.)*
+
+### Error/result view
+
+Something must have gone wrong when this view appears - there's either no valid communication with the GPS module at all or no NMEA stream data active. A complete communication outage is indicated with "broken link" symbol - time to check your wiring (maybe the power supply connection is broken or UBX TX/ uC RX not connected properly) and selected baudrate. In addition, the baudrate is printed as number and a "speed indicator" is shown (rabbit or snail icon).
+
+The display will give additional info on the bottom: when NMEA or UBX messages have been received, the background is filled (white), otherwise left blank (black).
+
+The display also lists the number of received bytes from the GPS serial shortly after startup and at the time the error view is drawn.
+
+Reset the target hardware to try again.
+
+You can also press the button to switch to the higher baudrate and retry again after reset (hold the button pressed until the splash screen appears as describedd above).
 
 
 ## Compatible hardware
@@ -77,13 +89,14 @@ The sketch has been used and tested with ...
 The following fonts have been used with **[U8G2](https://github.com/olikraus/u8g2)**:
 
 * `u8g2_font_chikita_tn`
-* `u8g2_font_siji_t_6x10`
+  (The FontStruction "Chikita" (http://fontstruct.com/Ffontstructions/show/52325) by "southernmedia" is licensed under a Creative Commons Attribution Share Alike license)
+* `u8g2_font_siji_t_6x10` (https://github.com/stark/siji; License/Copyright: Siji icon font is available under the "GNU General Public License v2.0")
 * `u8g2_font_streamline_*_t` (attribution link: [Free vectors icons and illustrations from Streamline](https://www.streamlinehq.com/))
-* `u8g2_font_unifont_t_animals`
+* `u8g2_font_unifont_t_animals` (https://savannah.gnu.org/projects/unifont; https://github.com/olikraus/u8g2/wiki/fntgrpunifont)
 
-**[TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus)** made it very easy to get satellite elevation, azimuth and "signal strength" from the NMEA messages. The [`SatElevTracker.ino` example](https://github.com/mikalhart/TinyGPSPlus/blob/master/examples/SatElevTracker/SatElevTracker.ino) was a very good starting point.
+**[TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus)** makes it very easy to get satellite elevation, azimuth and "signal strength" from the NMEA messages. The [`SatElevTracker.ino` example](https://github.com/mikalhart/TinyGPSPlus/blob/master/examples/SatElevTracker/SatElevTracker.ino) was a very good starting point.
 
 
 ## References
 
-The OBS logo bitmap has been taken from https://github.com/openbikesensor/OpenBikeSensorFirmware/blob/b4db7c662f48321e686d175fd6e9fc4e9c56afd5/src/logo.h#L31.
+The OBS logo bitmap (see [`ObsLogo.h`](./ObsLogo.h)) has been taken from https://github.com/openbikesensor/OpenBikeSensorFirmware/blob/b4db7c662f48321e686d175fd6e9fc4e9c56afd5/src/logo.h#L31.

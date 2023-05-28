@@ -47,7 +47,7 @@ const uint8_t *glyphFont = u8g2_font_siji_t_6x10; // info from u8g2: Siji (https
 const uint8_t *glyphFont2 = u8g2_font_streamline_interface_essential_other_t; // info from u8g2 (https://github.com/olikraus/u8g2/wiki/fntgrpstreamline); The "streamline pixel" icons are available for free if the attribution link is provided --> Free vectors icons and illustrations from Streamline: https://www.streamlinehq.com/
 const uint8_t *glyphFont3 = u8g2_font_streamline_map_navigation_t;
 const uint8_t *glyphFont4 = u8g2_font_streamline_interface_essential_link_t;
-const uint8_t *glyphFont5 = u8g2_font_unifont_t_animals;
+const uint8_t *glyphFont5 = u8g2_font_unifont_t_animals; // https://savannah.gnu.org/projects/unifont; https://github.com/olikraus/u8g2/wiki/fntgrpunifont
 
 // GPS related definitions and declarations
 // -------------------------------------------------------------------------------------------

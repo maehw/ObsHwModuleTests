@@ -1,4 +1,4 @@
-
+// taken from https://github.com/openbikesensor/OpenBikeSensorFirmware/blob/b4db7c662f48321e686d175fd6e9fc4e9c56afd5/src/logo.h#L31
 #define OBSLogo_width 128
 #define OBSLogo_height 64
 const unsigned char OBSLogo [] PROGMEM = {
