@@ -1,4 +1,4 @@
-![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg)
+ [![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg)](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml)
 
 # OBS GPS test
 
