@@ -1,4 +1,4 @@
-#include "GpsSoftwareSerial.h"
+#include "GpsSerial.h"
 
 #define DEBUG_PRINTLN(msg)  Serial.println(msg);
 #define DEBUG_PRINT(msg)  Serial.print(msg);

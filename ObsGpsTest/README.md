@@ -78,7 +78,7 @@ The following fonts have been used with **[U8G2](https://github.com/olikraus/u8g
 
 * `u8g2_font_chikita_tn`
 * `u8g2_font_siji_t_6x10`
-* `u8g2_font_streamline_*_t`
+* `u8g2_font_streamline_*_t` (attribution link: [Free vectors icons and illustrations from Streamline](https://www.streamlinehq.com/))
 * `u8g2_font_unifont_t_animals`
 
 **[TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus)** made it very easy to get satellite elevation, azimuth and "signal strength" from the NMEA messages. The [`SatElevTracker.ino` example](https://github.com/mikalhart/TinyGPSPlus/blob/master/examples/SatElevTracker/SatElevTracker.ino) was a very good starting point.

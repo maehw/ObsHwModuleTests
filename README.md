@@ -6,7 +6,7 @@ So far, there's ...
 
 * the [OBS display module test](./ObsDisplayButtonTest/README.md) and
 * the [OBS GPS module test jig](./ObsGpsModuleTestJig/README.md) and
-* the [OBS GPS test](./ObsGpsTest/README.md) ![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg).
+* the [OBS GPS test](./ObsGpsTest/README.md) [![ObsHwModuleTests workflow](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml/badge.svg)](https://github.com/maehw/ObsHwModuleTests/actions/workflows/main.yml).
 
 Also related, but not yet used to test OBS:
 

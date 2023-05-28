@@ -3,145 +3,17 @@
    for details: see README.md
 */
 
+// Includes
+// -------------------------------------------------------------------------------------------
 #include <Arduino.h>
 #include <U8g2lib.h>
 //#include <Wire.h> //I2C for the display did not seem to work
 #include <TinyGPSPlus.h>
-//#include <SoftwareSerial.h>
-#include "GpsSoftwareSerial.h"
+#include "GpsSerial.h"
+#include "ObsLogo.h"
 
-// Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
-// otherwise the input pin will float around and the display may show garbage.
-static const int ButtonPin = 2;
-static const int GpsSerialRxPin = 16; // OBS' TX_NEO6M signal: IO16
-static const int GpsSerialTxPin = 17; // OBS' RX_NEO6M signal: IO17
-static const uint32_t GpsSerialBaudSlow = 9600;
-static const uint32_t GpsSerialBaudFast = 115200;
-static const int MAX_SATELLITES = 32;
-
-bool fastBaudRate = false;
-
-// The TinyGPSPlus object
-TinyGPSPlus gps;
-
-// The serial connection to the GPS device
-GpsSoftwareSerial ss(GpsSerialRxPin, GpsSerialTxPin);
-
-unsigned int ssStartupRxCount = 0;
-
-// Choosing a specific U8g2 constructor for our display
-// (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
-U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE); // does not seem to work
-
-TinyGPSCustom totalGPGSVMessages(gps, "GPGSV", 1); // $GPGSV sentence, first element
-TinyGPSCustom messageNumber(gps, "GPGSV", 2);      // $GPGSV sentence, second element
-TinyGPSCustom gpsSatNumber[4];
-TinyGPSCustom gpsElevation[4];
-TinyGPSCustom gpsAzimuth[4];
-TinyGPSCustom gpsSnr[4];
-
-
-#define OBSLogo_width 128
-#define OBSLogo_height 64
-const unsigned char OBSLogo [] PROGMEM = {
-  // 'OBS Logo S, 128x64px
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0xfc, 0xfc, 0x8d, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7e,
-  0xfc, 0xfd, 0x9d, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x03, 0x00, 0xee, 0xfc, 0xfd, 0x9d, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x03, 0x00, 0xc6, 0x8c, 0x1d, 0x9c, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x03, 0x00, 0xc7,
-  0x8c, 0x1d, 0xbc, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0xff, 0x3f, 0xc7, 0x8c, 0xfd, 0xbc, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0xff, 0x3f, 0xc7, 0xcc, 0xfd, 0xfc, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xff, 0x3f, 0xc7,
-  0xfc, 0xfd, 0xec, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x03, 0x00, 0xc7, 0xfc, 0x1c, 0xec, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x03, 0x00, 0xc7, 0x3c, 0x1c, 0xec, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x03, 0x00, 0xc6,
-  0x0c, 0x1c, 0xcc, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x03, 0x00, 0xe6, 0x0c, 0x1c, 0xcc, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0x0c, 0xfc, 0x8d, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c,
-  0x0c, 0xfc, 0x8d, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x38, 0x0c, 0xfc, 0x0d, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x07, 0x33, 0xc6, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x1f, 0x33, 0xe6, 0x0f, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3f, 0x33, 0xe7,
-  0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x39, 0x33, 0xe3, 0x00, 0x00, 0x80, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x31, 0xb3, 0xe3, 0x00, 0x00, 0x80, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x39, 0xf3, 0xe1,
-  0x00, 0x00, 0x80, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x3f, 0xf3, 0xe1, 0xe7, 0xff, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x1f, 0xf3, 0xe1, 0xe7, 0xff, 0xff, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3f, 0xf3, 0xe3,
-  0xe7, 0xff, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x39, 0xf3, 0xe3, 0x00, 0x00, 0x80, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x31, 0x73, 0xe3, 0x00, 0x00, 0x80, 0x03,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x31, 0x33, 0xe7,
-  0x00, 0x00, 0x80, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x39, 0x33, 0xe7, 0x00, 0x00, 0x80, 0x03, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x3f, 0x33, 0xee, 0x0f, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x1f, 0x33, 0xee,
-  0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x07, 0x33, 0xcc, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x8f, 0x9f, 0x31, 0x3c, 0x38, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x9f, 0x9f, 0x71, 0x7e, 0x7c, 0xfc, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xbf, 0x9f, 0x73,
-  0x7f, 0xfe, 0xfc, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x99, 0x83, 0x73, 0x27, 0xe6, 0xcc, 0x01, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x81, 0x81, 0x73, 0x03, 0xc7, 0x8c, 0x01,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x81, 0x81, 0x77,
-  0x07, 0xc7, 0x8c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x87, 0x9f, 0x77, 0x1f, 0xc7, 0xcc, 0x01, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x9f, 0x9f, 0x7f, 0x3e, 0xc7, 0xfc, 0x01,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x9f, 0x9f, 0x7d,
-  0x7c, 0xc7, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0xbc, 0x81, 0x7d, 0x78, 0xc7, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x81, 0x7d, 0x60, 0xc7, 0xcc, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x81, 0x79,
-  0x62, 0xc6, 0xcc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0xb9, 0x9f, 0x79, 0x77, 0xee, 0xcc, 0x01, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x80, 0x9f, 0x9f, 0x71, 0x7f, 0x7e, 0xcc, 0x01,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x9f, 0x9f, 0x71,
-  0x3e, 0x7c, 0x8c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x06, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00
-};
-
-const uint8_t *smallTextFont = u8g2_font_chikita_tn; // info from u8g2: The FontStruction "Chikita" (http://fontstruct.com/Ffontstructions/show/52325) by "southernmedia" is licensed under a Creative Commons Attribution Share Alike license
-const uint8_t *textFont = u8g2_font_chikita_tf;
-const uint8_t *glyphFont = u8g2_font_siji_t_6x10; // info from u8g2: Siji (https://github.com/stark/siji), License/Copyright: Siji icon font is available under the "GNU General Public License v2.0"
-const uint8_t *glyphFont2 = u8g2_font_streamline_interface_essential_other_t;
-const uint8_t *glyphFont3 = u8g2_font_streamline_map_navigation_t;
-const uint8_t *glyphFont4 = u8g2_font_streamline_interface_essential_link_t;
-const uint8_t *glyphFont5 = u8g2_font_unifont_t_animals;
-
+// Type definitions
+// -------------------------------------------------------------------------------------------
 typedef struct
 {
   int no;
@@ -151,9 +23,53 @@ typedef struct
   bool active;
 } satellite_t;
 
+// Hardware-related definitions
+// -------------------------------------------------------------------------------------------
+// Make sure that the button pin is pulled-down via a hardware resistor (as a pressed button will connect to VCC on the OBS display module);
+// otherwise the input pin will float around and the display may show garbage.
+static const int ButtonPin = 2; // OBS' display module's button pin (w/ hardware pull-down resistor)
+static const int GpsSerialRxPin = 16; // OBS' TX_NEO6M signal: IO16
+static const int GpsSerialTxPin = 17; // OBS' RX_NEO6M signal: IO17
+static const uint32_t GpsSerialBaudSlow = 9600;
+static const uint32_t GpsSerialBaudFast = 115200;
+
+// Display and UI related definitions and declarations
+// -------------------------------------------------------------------------------------------
+
+// Choosing a specific U8g2 constructor for our display
+// (The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE); // does not seem to work
+
+const uint8_t *smallTextFont = u8g2_font_chikita_tn; // info from u8g2: The FontStruction "Chikita" (http://fontstruct.com/Ffontstructions/show/52325) by "southernmedia" is licensed under a Creative Commons Attribution Share Alike license
+const uint8_t *textFont = u8g2_font_chikita_tf;
+const uint8_t *glyphFont = u8g2_font_siji_t_6x10; // info from u8g2: Siji (https://github.com/stark/siji), License/Copyright: Siji icon font is available under the "GNU General Public License v2.0"
+const uint8_t *glyphFont2 = u8g2_font_streamline_interface_essential_other_t; // info from u8g2 (https://github.com/olikraus/u8g2/wiki/fntgrpstreamline); The "streamline pixel" icons are available for free if the attribution link is provided --> Free vectors icons and illustrations from Streamline: https://www.streamlinehq.com/
+const uint8_t *glyphFont3 = u8g2_font_streamline_map_navigation_t;
+const uint8_t *glyphFont4 = u8g2_font_streamline_interface_essential_link_t;
+const uint8_t *glyphFont5 = u8g2_font_unifont_t_animals;
+
+// GPS related definitions and declarations
+// -------------------------------------------------------------------------------------------
+
+GpsSoftwareSerial gs(GpsSerialRxPin, GpsSerialTxPin); // serial connection to the GPS device (which has some understanding about the UBX and NMEA protocols)
+unsigned int gsStartupRxCount = 0; // counter for received bytes from the GPS serial
+bool fastBaudRate = false;
+
+static const int MAX_SATELLITES = 32;
+TinyGPSPlus gps; // used for NMEA decoding
+TinyGPSCustom totalGPGSVMessages(gps, "GPGSV", 1); // $GPGSV sentence, first element
+TinyGPSCustom messageNumber(gps, "GPGSV", 2);      // $GPGSV sentence, second element
+TinyGPSCustom gpsSatNumber[4];
+TinyGPSCustom gpsElevation[4];
+TinyGPSCustom gpsAzimuth[4];
+TinyGPSCustom gpsSnr[4];
+
 static satellite_t sats[MAX_SATELLITES]; // sorted by satellite number
 static satellite_t sortedSats[MAX_SATELLITES]; // sorted by signal strength
 
+// Local function defintions (no declarations due to laziness)
+// -------------------------------------------------------------------------------------------
 
 void drawSatAbsolute(uint8_t x, uint8_t y, bool filled = false)
 {
@@ -309,7 +225,7 @@ void drawGraphics(int numActiveSats, satellite_t* drawSats)
   drawTime();
 
   // draw two message indicators for received UBX and NMEA protocol messages
-  drawMsgIndicators(ss.hasSeenUbx(), ss.hasSeenNmea());
+  drawMsgIndicators(gs.hasSeenUbx(), gs.hasSeenNmea());
 
   u8g2.sendBuffer();
 }
@@ -422,14 +338,22 @@ void drawErrorScreen(bool seenUbx, bool seenNmea)
   u8g2.drawStr(xPos + 25, yPos, itoa(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow, charBuffer, 10));
 
   u8g2.drawStr(xPos - 3, yPos + 10, "RX ST"); // RX count at startup
-  u8g2.drawStr(xPos + 33, yPos + 10, itoa((ssStartupRxCount > 9999) ? 9999 : ssStartupRxCount, charBuffer, 10));
+  u8g2.drawStr(xPos + 33, yPos + 10, itoa((gsStartupRxCount > 9999) ? 9999 : gsStartupRxCount, charBuffer, 10));
 
-  u8g2.drawStr(xPos - 3, yPos + 20, "RX NOW"); // RX count now
-  unsigned int rxCount = ss.getRxCount();
+  u8g2.drawStr(xPos - 3, yPos + 20, "RX LST"); // RX count "now"
+  unsigned int rxCount = gs.getRxCount();
   u8g2.drawStr(xPos + 33, yPos + 20, itoa((rxCount > 9999) ? 9999 : rxCount, charBuffer, 10));
 
+  // when neither seen UBX nor NMEA, display broken link; otherwise a normal link
   u8g2.setFont(glyphFont4);
-  u8g2.drawGlyph(xPos + 5, yPos + 41, 0x0032); // broken link icon
+  if(!seenUbx && !seenNmea)
+  {
+    u8g2.drawGlyph(xPos + 5, yPos + 41, 0x0032); // broken link icon
+  }
+  else
+  {
+    u8g2.drawGlyph(xPos + 5, yPos + 41, 0x0030); // working link icon
+  }
 
   // further indicators for fast and slow
   u8g2.setFont(glyphFont5);
@@ -469,6 +393,7 @@ int sortSats()
 
 void printSatInfo(int numActiveSats)
 {
+  // print detailed infromation about every satellite (number, activity, elevation, azimuth, SNR)
   for (int i = 0; i < numActiveSats; i++)
   {
     Serial.print(F("Sat #"));
@@ -489,9 +414,14 @@ void printSatInfo(int numActiveSats)
 void showUbxMessageStatus(uint8_t burstNumber)
 {
   static char charBuffer[8];
-  uint8_t xPos = 8;
+  const char pollSuccessMsg[] = "OK"; // polling OK
+  const char pollFailMsg[] = "ER"; // polling ERROR
+  const char rxSuccessMsg[] = "OK"; // receiving OK (received a reply to the poll request)
+  const char rxFailMsg[] = "NO"; // receiving NOt OK (didn't receive a reply)
+  uint8_t xPos = 8; // UBX message name text's x start offset
   uint8_t yPos = 9;
-  uint8_t xOffset = 86;
+  uint8_t xOffset = 80; // status text's x start offset (to the right of the display; right of the UBX message names)
+  uint8_t xOffsetPollRx = 16; // spacing that depends on the text in pollSuccessMsg/pollFailMsg
 
   u8g2.clearBuffer();
   u8g2.setFont(textFont);
@@ -505,33 +435,33 @@ void showUbxMessageStatus(uint8_t burstNumber)
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-POSECEF");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSECEF) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSECEF) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSECEF) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSECEF) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-POSLLH");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSLLH) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSLLH) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSLLH) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_POSLLH) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-STATUS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_STATUS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_STATUS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_STATUS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_STATUS) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-DOP");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_DOP) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_DOP) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_DOP) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_DOP) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-SOL");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SOL) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SOL) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SOL) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SOL) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-VELECEF");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELECEF) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELECEF) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELECEF) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELECEF) ? rxSuccessMsg : rxFailMsg);
   }
   else if (burstNumber == 1)
   {
@@ -540,33 +470,33 @@ void showUbxMessageStatus(uint8_t burstNumber)
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-VELNED");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELNED) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELNED) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELNED) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_VELNED) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-TIMEGPS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEGPS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEGPS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEGPS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEGPS) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-TIMEUTC");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEUTC) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEUTC) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEUTC) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_TIMEUTC) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-CLOCK");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_CLOCK) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_CLOCK) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_CLOCK) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_CLOCK) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-SVINFO");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SVINFO) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SVINFO) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SVINFO) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SVINFO) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-DPGPS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_DGPS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_DGPS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_DGPS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_DGPS) ? rxSuccessMsg : rxFailMsg);
 
   }
   else if (burstNumber == 2)
@@ -576,33 +506,33 @@ void showUbxMessageStatus(uint8_t burstNumber)
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-SBAS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SBAS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SBAS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_SBAS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_SBAS) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-EFKSTATUS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_EFKSTATUS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_EFKSTATUS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_EFKSTATUS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_EFKSTATUS) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "NAV-AOPSTATUS");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_AOPSTATUS) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_AOPSTATUS) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_NAV_AOPSTATUS) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_NAV_AOPSTATUS) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-MSG");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_MSG) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_MSG) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_MSG) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_MSG) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-INF");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_INF) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_INF) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_INF) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_INF) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-DAT");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_DAT) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_DAT) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_DAT) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_DAT) ? rxSuccessMsg : rxFailMsg);
   }
   else if (burstNumber == 3)
   {
@@ -611,33 +541,33 @@ void showUbxMessageStatus(uint8_t burstNumber)
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-TP");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_TP) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_TP) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_TP) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_TP) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-RATE");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_RATE) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_RATE) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_RATE) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_RATE) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-FXN");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_FXN) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_FXN) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_FXN) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_FXN) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-RXM");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_RXM) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_RXM) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_RXM) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_RXM) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-EKF");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_EKF) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_EKF) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_EKF) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_EKF) ? rxSuccessMsg : rxFailMsg);
 
     yPos += 8;
     u8g2.drawStr(xPos, yPos, "CFG-PRT");
-    u8g2.drawStr(xPos + xOffset, yPos, ss.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_PRT) ? "y" : "n");
-    u8g2.drawStr(xPos + xOffset + 7, yPos, ss.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_PRT) ? "Y" : "N");
+    u8g2.drawStr(xPos + xOffset, yPos, gs.polledMessage(GpsSoftwareSerial::UBX_MSG_CFG_PRT) ? pollSuccessMsg : pollFailMsg);
+    u8g2.drawStr(xPos + xOffset + xOffsetPollRx, yPos, gs.rxedMessage(GpsSoftwareSerial::UBX_MSG_CFG_PRT) ? rxSuccessMsg : rxFailMsg);
   }
   u8g2.sendBuffer();
   delay(1700); // the time in ms the display is frozen
@@ -651,48 +581,48 @@ void pollMultiUbx(uint8_t burstNumber)
 
   if (burstNumber == 0)
   {
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_POSECEF)) { Serial.println("Unable to poll NAV-POSECEF."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_POSLLH)) { Serial.println("Unable to poll NAV-POSLLH."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_STATUS)) { Serial.println("Unable to poll NAV-STATUS."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_DOP)) { Serial.println("Unable to poll NAV-DOP."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SOL)) { Serial.println("Unable to poll NAV-SOL."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_VELECEF)) { Serial.println("Unable to poll NAV-VELECEF."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_POSECEF)) { Serial.println("Unable to poll NAV-POSECEF."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_POSLLH)) { Serial.println("Unable to poll NAV-POSLLH."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_STATUS)) { Serial.println("Unable to poll NAV-STATUS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_DOP)) { Serial.println("Unable to poll NAV-DOP."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SOL)) { Serial.println("Unable to poll NAV-SOL."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_VELECEF)) { Serial.println("Unable to poll NAV-VELECEF."); }
   }
   else if (burstNumber == 1)
   {
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_VELNED)) { Serial.println("Unable to poll NAV-VELNED."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_TIMEGPS)) { Serial.println("Unable to poll NAV-TIMEGPS."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_TIMEUTC)) { Serial.println("Unable to poll NAV-TIMEUTC."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_CLOCK)) { Serial.println("Unable to poll NAV-CLOCK."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SVINFO)) { Serial.println("Unable to poll NAV-SVINFO."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_DGPS)) { Serial.println("Unable to poll NAV-DGPS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_VELNED)) { Serial.println("Unable to poll NAV-VELNED."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_TIMEGPS)) { Serial.println("Unable to poll NAV-TIMEGPS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_TIMEUTC)) { Serial.println("Unable to poll NAV-TIMEUTC."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_CLOCK)) { Serial.println("Unable to poll NAV-CLOCK."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SVINFO)) { Serial.println("Unable to poll NAV-SVINFO."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_DGPS)) { Serial.println("Unable to poll NAV-DGPS."); }
   }
   else if (burstNumber == 2)
   {
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SBAS)) { Serial.println("Unable to poll NAV-SBAS."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_EFKSTATUS)) { Serial.println("Unable to poll NAV-EFKSTATUS."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_AOPSTATUS)) { Serial.println("Unable to poll NAV-AOPSTATUS."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_MSG)) { Serial.println("Unable to poll CFG-MSG."); } // TODO: has param(s)! payload length=2
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_INF)) { Serial.println("Unable to poll CFG-INF."); } // TODO: has param(s)! payload length=1
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_DAT)) { Serial.println("Unable to poll CFG-DAT."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_SBAS)) { Serial.println("Unable to poll NAV-SBAS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_EFKSTATUS)) { Serial.println("Unable to poll NAV-EFKSTATUS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_NAV, GpsSoftwareSerial::UBX_MSG_ID_NAV_AOPSTATUS)) { Serial.println("Unable to poll NAV-AOPSTATUS."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_MSG)) { Serial.println("Unable to poll CFG-MSG."); } // TODO: has param(s)! payload length=2
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_INF)) { Serial.println("Unable to poll CFG-INF."); } // TODO: has param(s)! payload length=1
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_DAT)) { Serial.println("Unable to poll CFG-DAT."); }
   }
   else if (burstNumber == 3)
   {
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_TP)) { Serial.println("Unable to poll CFG-TP."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_RATE)) { Serial.println("Unable to poll CFG-RATE."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_FXN)) { Serial.println("Unable to poll CFG-FXN."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_RXM)) { Serial.println("Unable to poll CFG-RXM."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_EKF)) { Serial.println("Unable to poll CFG-EKF."); }
-    if(!ss.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_PRT)) { Serial.println("Unable to poll CFG-PRT."); } // this one seems to have finally "worked for me" on Techtotop GPS modules
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_TP)) { Serial.println("Unable to poll CFG-TP."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_RATE)) { Serial.println("Unable to poll CFG-RATE."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_FXN)) { Serial.println("Unable to poll CFG-FXN."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_RXM)) { Serial.println("Unable to poll CFG-RXM."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_EKF)) { Serial.println("Unable to poll CFG-EKF."); }
+    if(!gs.pollUbxMessage(GpsSoftwareSerial::UBX_MSG_CLASS_CFG, GpsSoftwareSerial::UBX_MSG_ID_CFG_PRT)) { Serial.println("Unable to poll CFG-PRT."); } // this one seems to have finally "worked for me" on Techtotop GPS modules
   }
 }
 
-void checkCommunication(bool dataAvailable, bool trap)
+void checkCommunication(bool parsedNmeaDataAvailable, bool trap)
 {
-  bool seenUbx = ss.hasSeenUbx();
-  bool seenNmea = ss.hasSeenNmea();
+  bool seenUbx = gs.hasSeenUbx();
+  bool seenNmea = gs.hasSeenNmea();
 
-  unsigned int rxCount = ss.getRxCount();
+  unsigned int rxCount = gs.getRxCount();
   Serial.print(F("Current RX count: "));
   Serial.println(rxCount);
 
@@ -702,6 +632,7 @@ void checkCommunication(bool dataAvailable, bool trap)
   }
   else
   {
+    // print status of UBX protocol messages
     Serial.print(F("UBX RX "));
     if (!seenUbx)
     {
@@ -709,10 +640,11 @@ void checkCommunication(bool dataAvailable, bool trap)
     }
     Serial.println(F("seen."));
 
+    // print status of NMEA protocol messages
     Serial.print(F("NMEA RX "));
     if (seenNmea)
     {
-      if (dataAvailable)
+      if (parsedNmeaDataAvailable)
       {
         Serial.println(F("seen, data available. Everything seems to work."));
       }
@@ -727,19 +659,19 @@ void checkCommunication(bool dataAvailable, bool trap)
     }
   }
 
-  if(!dataAvailable && trap)
+  if(!parsedNmeaDataAvailable && trap)
   {
     drawErrorScreen(seenUbx, seenNmea);
 
-    // dump RX memory
-    unsigned int len = ss.getRxStartupMemLen();
+    // dump RX memory on the debug serial
+    unsigned int len = gs.getRxStartupMemLen();
     Serial.print(F("RX startup memory length: "));
     Serial.println(len);
     Serial.print(F("RX count: "));
     Serial.println(rxCount);
 
     unsigned int loopCnt = (len < rxCount) ? len : rxCount;
-    int* pMem = ss.getRxStartupMem();
+    int* pMem = gs.getRxStartupMem();
 
     // dump received bytes as HEX
     for (unsigned int i = 0; i < loopCnt; i++)
@@ -766,6 +698,8 @@ void checkCommunication(bool dataAvailable, bool trap)
 void setup(void)
 {
   unsigned int setupTime = millis();
+  // check the GPIO pin for the button to decide if the GPS module communication shall be fast or slow
+  // note: we could also have a selection menu here, but we'd definitely lose data during power-up of the GPS module
   pinMode(ButtonPin, INPUT);
   if (digitalRead(ButtonPin) == HIGH)
   {
@@ -777,27 +711,28 @@ void setup(void)
   }
 
   // start communication with GPS module (either fast or slow)
-  ss.begin(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow);
+  gs.begin(fastBaudRate ? GpsSerialBaudFast : GpsSerialBaudSlow);
 
-  // before setting anything else up, use the time directly after startup
+  // before setting anything else up, use the time directly after startup -- don't even setup the display before
   // to check for serial activity (and try to find NMEA or UBX);
-  // only read from software serial, do not use for moving to GPS decoder;
+  // only read from the serial, do not use the received data in the GPS NMEA decoder yet;
   // the UBX-speaking modules dump some info on startup but are quiet from then on;
-  // don't even setup the display before
   while (millis() <= (setupTime + 2000))
   {
     // Dispatch incoming characters
-    if (ss.available() > 0)
+    if (gs.available() > 0)
     {
-      ss.read();
+      gs.read();
     }
   }
 
+  // now it's time to setup the display and the UI
   setupDisplay();
 
   // use hardware serial for logging
   Serial.begin(115200);
   Serial.print(F("Using TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  // log if we use fast or slow rate for communication with the GPS module
   if (fastBaudRate)
   {
     Serial.print(F("Using fast (="));
@@ -809,11 +744,10 @@ void setup(void)
     Serial.print(GpsSerialBaudSlow);
   }
   Serial.println(F(") baudrate w/ GPS module."));
-  ssStartupRxCount = ss.getRxCount();
+
+  gsStartupRxCount = gs.getRxCount();
   Serial.print(F("Rx'ed no. of bytes during startup: "));
-  Serial.println(ssStartupRxCount);
-  //Serial.print(F("Setup time was: "));
-  //Serial.println(setupTime);
+  Serial.println(gsStartupRxCount);
 
   drawSplashScreen(1);
 
@@ -837,18 +771,18 @@ void setup(void)
 
 void loop(void)
 {
-  static bool dataAvailable = false;
+  static bool parsedNmeaDataAvailable = false;
   static const int downsamplingFactor = 1; // base rate usually is 1 Hz, i.e. every second
   static int downsampleCounter = downsamplingFactor - 1;
 
-  // Dispatch incoming characters
-  if (ss.available() > 0)
+  // Dispatch incoming characters from the GPS serial
+  if (gs.available() > 0)
   {
-    gps.encode(ss.read());
+    gps.encode(gs.read());
 
     if (totalGPGSVMessages.isUpdated())
     {
-      dataAvailable = true;
+      parsedNmeaDataAvailable = true;
 
       // four satellites per message
       for (int i = 0; i < 4; ++i)
@@ -908,7 +842,7 @@ void loop(void)
     if (checkCount == 0)
     {
       Serial.println("Coms check #1");
-      checkCommunication(dataAvailable, /*trap=*/false);
+      checkCommunication(parsedNmeaDataAvailable, /*trap=*/false);
       pollMultiUbx(0);
       checkCount++;
     }
@@ -917,7 +851,7 @@ void loop(void)
     {
       Serial.println("Coms check #2");
       showUbxMessageStatus(0);
-      checkCommunication(dataAvailable, /*trap=*/false); // don't trap yet
+      checkCommunication(parsedNmeaDataAvailable, /*trap=*/false); // don't trap yet
       pollMultiUbx(1);
       checkCount++;
     }
@@ -926,7 +860,7 @@ void loop(void)
     {
       Serial.println("Coms check #3");
       showUbxMessageStatus(1);
-      checkCommunication(dataAvailable, /*trap=*/false); // still don't trap...
+      checkCommunication(parsedNmeaDataAvailable, /*trap=*/false); // still don't trap...
       pollMultiUbx(2);
       checkCount++;
     }
@@ -935,7 +869,7 @@ void loop(void)
     {
       Serial.println("Coms check #4");
       showUbxMessageStatus(2);
-      checkCommunication(dataAvailable, /*trap=*/false); // still don't trap...
+      checkCommunication(parsedNmeaDataAvailable, /*trap=*/false); // still don't trap...
       pollMultiUbx(3);
       checkCount++;
     }
@@ -944,7 +878,7 @@ void loop(void)
     {
       Serial.println("Coms check #5");
       showUbxMessageStatus(3);
-      checkCommunication(dataAvailable, /*trap=*/true); // finally trap...
+      checkCommunication(parsedNmeaDataAvailable, /*trap=*/true); // finally trap...
       checkCount++;
     }
   }
